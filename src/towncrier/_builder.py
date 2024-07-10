@@ -17,15 +17,18 @@ from jinja2 import Template
 from towncrier._settings.load import Config
 
 
-# Returns issue, category and counter or (None, None, None) if the basename
-# could not be parsed or doesn't contain a valid category.
+# Returns issue, category and counter. But if the basename could not be parsed
+# or doesn't contain a valid category, returns (None, None, None) or raises
+# a ValueError if in strict mode.
 def parse_newfragment_basename(
-    basename: str, frag_type_names: Iterable[str]
+    basename: str, frag_type_names: Iterable[str], strict: bool = False
 ) -> tuple[str, str, int] | tuple[None, None, None]:
     invalid = (None, None, None)
     parts = basename.split(".")
 
     if len(parts) == 1:
+        if strict:
+            raise ValueError(f"Invalid news fragment name: {basename}")
         return invalid
 
     # There are at least 2 parts. Search for a valid category from the second
@@ -53,6 +56,8 @@ def parse_newfragment_basename(
             return issue, category, counter
     else:
         # No valid category found.
+        if strict:
+            raise ValueError(f"Invalid news fragment name: {basename}")
         return invalid
 
 
@@ -106,11 +111,17 @@ class FragmentsPath:
 def find_fragments(
     base_directory: str,
     config: Config,
+    strict: bool = False,
 ) -> tuple[Mapping[str, Mapping[tuple[str, str, int], str]], list[tuple[str, str]]]:
     """
     Sections are a dictonary of section names to paths.
     """
     get_section_path = FragmentsPath(base_directory, config)
+    template_filename = (
+        os.path.basename(config.template)
+        if isinstance(config.template, str)
+        else config.template[1]
+    )
 
     content = {}
     fragment_files = []
@@ -129,8 +140,10 @@ def find_fragments(
         file_content = {}
 
         for basename in files:
+            if basename == template_filename:
+                continue
             issue, category, counter = parse_newfragment_basename(
-                basename, config.types
+                basename, config.types, strict
             )
             if category is None:
                 continue

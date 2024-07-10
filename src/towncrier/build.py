@@ -106,6 +106,16 @@ def _validate_answer(ctx: Context, param: Option, value: bool) -> bool:
     help="Do not ask for confirmations. But keep news fragments.",
     callback=_validate_answer,
 )
+@click.option(
+    "--check-names",
+    "check_names",
+    default=False,
+    flag_value=True,
+    help=(
+        "Fail if there are any files in the news fragments directory that "
+        "have invalid names (excluding the template file)."
+    ),
+)
 def _main(
     draft: bool,
     directory: str | None,
@@ -115,6 +125,7 @@ def _main(
     project_date: str | None,
     answer_yes: bool,
     answer_keep: bool,
+    check_names: bool,
 ) -> None:
     """
     Build a combined news file from news fragment.
@@ -129,6 +140,7 @@ def _main(
             project_date,
             answer_yes,
             answer_keep,
+            check_names,
         )
     except ConfigError as e:
         print(e, file=sys.stderr)
@@ -144,6 +156,7 @@ def __main(
     project_date: str | None,
     answer_yes: bool,
     answer_keep: bool,
+    check_names: bool,
 ) -> None:
     """
     The main entry point.
@@ -178,7 +191,9 @@ def __main(
 
     click.echo("Finding news fragments...", err=to_err)
 
-    fragment_contents, fragment_files = find_fragments(base_directory, config)
+    fragment_contents, fragment_files = find_fragments(
+        base_directory, config, strict=check_names
+    )
     fragment_filenames = [filename for (filename, _category) in fragment_files]
 
     click.echo("Rendering news fragments...", err=to_err)
