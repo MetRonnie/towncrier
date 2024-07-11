@@ -12,23 +12,21 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, DefaultDict, Iterable, Iterator, Mapping, NamedTuple, Sequence
 
+from click import ClickException
 from jinja2 import Template
 
 from towncrier._settings.load import Config
 
 
-# Returns issue, category and counter. But if the basename could not be parsed
-# or doesn't contain a valid category, returns (None, None, None) or raises
-# a ValueError if in strict mode.
+# Returns issue, category and counter or (None, None, None) if the basename
+# could not be parsed or doesn't contain a valid category.
 def parse_newfragment_basename(
-    basename: str, frag_type_names: Iterable[str], strict: bool = False
+    basename: str, frag_type_names: Iterable[str]
 ) -> tuple[str, str, int] | tuple[None, None, None]:
     invalid = (None, None, None)
     parts = basename.split(".")
 
     if len(parts) == 1:
-        if strict:
-            raise ValueError(f"Invalid news fragment name: {basename}")
         return invalid
 
     # There are at least 2 parts. Search for a valid category from the second
@@ -56,8 +54,6 @@ def parse_newfragment_basename(
             return issue, category, counter
     else:
         # No valid category found.
-        if strict:
-            raise ValueError(f"Invalid news fragment name: {basename}")
         return invalid
 
 
@@ -111,17 +107,19 @@ class FragmentsPath:
 def find_fragments(
     base_directory: str,
     config: Config,
-    strict: bool = False,
+    strict: bool | None,
 ) -> tuple[Mapping[str, Mapping[tuple[str, str, int], str]], list[tuple[str, str]]]:
     """
     Sections are a dictonary of section names to paths.
+
+    In strict mode, raise ClickException if any fragments have an invalid name.
     """
+    if strict is None:
+        # If strict mode is not set, turn it on only if build_ignore_filenames is set
+        # (this maintains backward compatibility).
+        strict = config.build_ignore_filenames is not None
+
     get_section_path = FragmentsPath(base_directory, config)
-    template_filename = (
-        os.path.basename(config.template)
-        if isinstance(config.template, str)
-        else config.template[1]
-    )
 
     content = {}
     fragment_files = []
@@ -140,12 +138,19 @@ def find_fragments(
         file_content = {}
 
         for basename in files:
-            if basename == template_filename:
+            # Skip files that we know are not news fragments:
+            if (
+                config.build_ignore_filenames
+                and basename in config.build_ignore_filenames
+            ):
                 continue
+
             issue, category, counter = parse_newfragment_basename(
-                basename, config.types, strict
+                basename, config.types
             )
             if category is None:
+                if strict and issue is None:
+                    raise ClickException(f"Invalid news fragment name: {basename}")
                 continue
             assert issue is not None
             assert counter is not None

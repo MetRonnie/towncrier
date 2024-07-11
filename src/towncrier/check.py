@@ -106,7 +106,7 @@ def __main(
         click.echo("Checks SKIPPED: news file changes detected.")
         sys.exit(0)
 
-    all_fragment_files = find_fragments(base_directory, config)[1]
+    all_fragment_files = find_fragments(base_directory, config, strict=True)[1]
     fragments = set()  # will only include fragments of types that are checked
     unchecked_fragments = set()  # will include fragments of types that are not checked
     for fragment_filename, category in all_fragment_files:
